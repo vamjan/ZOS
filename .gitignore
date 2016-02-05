@@ -1,0 +1,6 @@
+fat.o
+main.o
+Makefile.win
+output.fat
+ZOS_SP2015.dev
+ZOS_SP2015.layout
