@@ -4,6 +4,10 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include "fat.h"
+#define THREADS 5
+
+int A[THREADS*THREADS];
+pthread_t th[THREADS];
 
 /* run this program using the console pauser or add your own getch, system("pause") or input loop */
 void help() {
@@ -13,6 +17,19 @@ void help() {
 	printf("h - help\n");
 	printf("d - defragment\n");
 	printf("c - kontrola FAT\n");
+}
+
+void *Procedure(void *arg) {
+	int tmp = (int *)arg;
+	int i;
+	
+	for(i = 0; i < THREADS; i++) {
+		A[i*THREADS+tmp] = tmp+1;
+	}
+	
+	printf("Vlakno c.%d ukoncuje praci. Zapsano %d cisel.\n", tmp, i);
+	
+	return &i;
 }
 
 int main(int argc, char* argv[]) {
@@ -27,7 +44,25 @@ int main(int argc, char* argv[]) {
 		exit(0);
 	}
 	
-	load_file("output.fat");           
+	//load_file("output.fat");
+	
+	int i;
+	void *retval;
+	
+	for(i = 0; i < THREADS; i++) {
+		pthread_create(th[i], NULL, Procedure, i);
+	}
+	
+	for(i = 0; i < THREADS; i++) {
+		pthread_join(th[i], &retval);
+		printf("Pocet zapsanych cisel vlaknem c.%d je: %d\n", i+1, (int *)retval);
+	}
+	
+	printf("Vysledek\n");
+	for(i = 0; i < THREADS*THREADS; i++) {
+		printf("%d, ", A[i]);
+	}
    
     return 0;
 }
+
