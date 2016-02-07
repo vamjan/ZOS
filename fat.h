@@ -31,6 +31,6 @@ typedef struct{
 //funkce pro praci s FAT
 boot_record *create_boot_record(FILE *p_file);
 root_directory *create_root_directory(FILE *p_file);
-void load_file(char *path);
+void load_file();
 
 

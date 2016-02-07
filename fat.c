@@ -1,7 +1,25 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include "fat.h"
+
+FILE *p_file;
+boot_record *p_boot_record;
+
+root_directory **p_root_directory;	//pole o velikosti root_directory_max_entries_count, jsou v nem ulozeny inforamce o souborech
+unsigned int *fat_item, data_start;	//pole o velikosti cluster_count, reprezetuje puvodni FAT
+
+int open_file(char *path) {
+	p_file = fopen(path, "r+");
+	
+	//nepodarilo se otevrit soubor
+	if(!p_file) return 0;
+	
+    fseek(p_file, 0, SEEK_SET);
+    
+    return 1;
+}
 
 boot_record *create_boot_record(FILE *p_file) {
 	boot_record *retval = (boot_record *) malloc(sizeof(boot_record));
@@ -19,19 +37,46 @@ root_directory *create_root_dir(FILE *p_file) {
 	return retval;
 }
 
-void load_file(char *path) {
-	//otevru soubor a pro jistotu skocim na zacatek
-	FILE *p_file;
-	p_file = fopen(path, "r");
-    fseek(p_file, SEEK_SET, 0);
+void swap_clusters(int cluster1, int cluster2) {
+	char *p_cluster1 = malloc(sizeof(char) * p_boot_record->cluster_size);
+	fseek(p_file, data_start + cluster1*p_boot_record->cluster_size, SEEK_SET);
+    fread(p_cluster1, sizeof(char) * p_boot_record->cluster_size, 1, p_file);
     
-    //pointery na struktury root a boot                         
-    boot_record *p_boot_record;
-    root_directory **p_root_directory;
+    char *p_cluster2 = malloc(sizeof(char) * p_boot_record->cluster_size);
+	fseek(p_file, data_start + cluster2*p_boot_record->cluster_size, SEEK_SET);
+    fread(p_cluster2, sizeof(char) * p_boot_record->cluster_size, 1, p_file);
     
+    printf("Swapuju %s - %d a %s - %d\n", p_cluster1, data_start + cluster1*p_boot_record->cluster_size
+	,p_cluster2, data_start + cluster2*p_boot_record->cluster_size);
+    
+    fseek(p_file, data_start + cluster1*p_boot_record->cluster_size, SEEK_SET);
+    fwrite(&p_cluster2, sizeof(char) * p_boot_record->cluster_size, 1, p_file);
+    
+    fseek(p_file, data_start + cluster2*p_boot_record->cluster_size, SEEK_SET);
+    fwrite(&p_cluster1, sizeof(char) * p_boot_record->cluster_size, 1, p_file);
+    
+	free(p_cluster1);
+	free(p_cluster2);
+}
+
+void print_clusters() {
+	int i;
+	char *p_cluster = malloc(sizeof(char) * p_boot_record->cluster_size);
+	fseek(p_file, data_start, SEEK_SET);
+	printf("Vypisuji . . .\n");
+    for (i = 0; i < p_boot_record->cluster_count; i++)
+    {    
+      	fread(p_cluster, sizeof(char) * p_boot_record->cluster_size, 1, p_file);
+      	//pokud je prazdny (tedy zacina 0, tak nevypisuj obsah)
+      	if(p_cluster[0] != '\0')
+       		printf("Cluster %d - %d:%s\n",i,data_start+i*p_boot_record->cluster_size,p_cluster);
+    }
+}
+
+void load_file() {
+                        
     //alokujeme pamet
     p_boot_record = create_boot_record(p_file);
-    
     
     //prectu boot
     printf("-------------------------------------------------------- \n");
@@ -52,7 +97,7 @@ void load_file(char *path) {
     printf("-------------------------------------------------------- \n");
     
     long l;
-    unsigned int *fat_item, tmp;
+    unsigned int tmp;
     fat_item = (unsigned int *) malloc (sizeof(unsigned int)*p_boot_record->cluster_count);
     int j;
     for(j = 0; j < p_boot_record->fat_copies; j++)
@@ -95,9 +140,11 @@ void load_file(char *path) {
     printf("CLUSTERY - OBSAH \n");
     printf("-------------------------------------------------------- \n");
     
-    int position, data_start = ftell(p_file);
+	data_start = ftell(p_file);
+	
+	int position;
     unsigned int curr;
-    char *p_cluster = malloc(sizeof(char) * p_boot_record->cluster_size);
+    /*char *p_cluster = malloc(sizeof(char) * p_boot_record->cluster_size);
     
     for(i = 0; i < p_boot_record->root_directory_max_entries_count; i++) {
     	curr = p_root_directory[i]->first_cluster;
@@ -108,5 +155,6 @@ void load_file(char *path) {
     		curr = fat_item[curr];
     	}
     	printf("\n");
-    }
+    }*/
+
 }

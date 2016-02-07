@@ -20,19 +20,23 @@ void help() {
 	printf("c - kontrola FAT\n");
 }
 
-void *Procedure(void *arg) {
-	int tmp = (int *)arg;
-	int i;
-	int *retval;
+void run_defrag(int threads) {
+	load_file();
+	print_clusters();
+	swap_clusters(0, 1);
+	print_clusters();
+	swap_clusters(0, 1);
+	print_clusters();
+}
+
+void run_con_check(int threads) {
 	
-	for(i = 0; i < THREADS; i++) {
-		A[i*THREADS+tmp] = tmp+1;
-	}
-	
-	return (void *) i;
 }
 
 int main(int argc, char* argv[]) {
+	
+	int threads;
+	
 	if(argc == 2 && argv[1][0] == 'h') {
 		help();
 		exit(0);
@@ -41,29 +45,31 @@ int main(int argc, char* argv[]) {
 	if(argc != 4) {
 		printf("Neplatne parametry!");
 		help();
-		exit(0);
+		exit(1);
 	}
 	
-	//load_file("output.fat");
-	
-	printf("Starting!\n");
-	
-	int i;
-	void *retval;
-	
-	for(i = 0; i < THREADS; i++) {
-		printf("Vytvarim vlakno c.%d\n", i);
-		pthread_create(&th[i], NULL, Procedure, i);
+	if(open_file(argv[2])) {
+		printf("Soubor %s uspesne otevren!\n", argv[2]);
+	} else {
+		printf("Chyba pri otevirani souboru.\n");
+		exit(2);
 	}
 	
-	for(i = 0; i < THREADS; i++) {
-		pthread_join(th[i], &retval);
-		printf("Pocet zapsanych cisel vlaknem c.%d je: %d\n", i, (int)retval);
+	threads = atoi(argv[3]);
+	if(threads < 1 || threads > 100) {
+		printf("Zadany pocet vlaken je neplatny! Program bude pokracovat jedinym vlaknem.\n");
+		threads = 1;
 	}
 	
-	printf("Vysledek\n");
-	for(i = 0; i < THREADS; i++) {
-		printf("%d, ", A[i]);
+	if(argv[1][0] == 'd') {
+		printf("Zacina defragmentace . . .\n");
+		run_defrag(threads);
+	} else if(argv[1][0] == 'c') {
+		printf("Zacina kontrola konzistence . . .\n");
+		run_con_check(threads);
+	} else {
+		printf("Zadany parametr funkce je neplatny!\n");
+		exit(1);
 	}
    
     return 0;
