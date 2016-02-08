@@ -50,10 +50,10 @@ void swap_clusters(int cluster1, int cluster2) {
 	,p_cluster2, data_start + cluster2*p_boot_record->cluster_size);
     
     fseek(p_file, data_start + cluster1*p_boot_record->cluster_size, SEEK_SET);
-    fwrite(&p_cluster2, sizeof(char) * p_boot_record->cluster_size, 1, p_file);
+    fwrite(p_cluster2, sizeof(char) * p_boot_record->cluster_size, 1, p_file);
     
     fseek(p_file, data_start + cluster2*p_boot_record->cluster_size, SEEK_SET);
-    fwrite(&p_cluster1, sizeof(char) * p_boot_record->cluster_size, 1, p_file);
+    fwrite(p_cluster1, sizeof(char) * p_boot_record->cluster_size, 1, p_file);
     
 	free(p_cluster1);
 	free(p_cluster2);
