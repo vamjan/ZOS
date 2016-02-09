@@ -8,7 +8,7 @@ FILE *p_file;
 boot_record *p_boot_record;
 
 root_directory **p_root_directory;	//pole o velikosti root_directory_max_entries_count, jsou v nem ulozeny inforamce o souborech
-unsigned int *fat_item, data_start;	//pole o velikosti cluster_count, reprezetuje puvodni FAT
+unsigned int *fat_item, *new_fat, data_start;	//pole o velikosti cluster_count, reprezetuje puvodni FAT
 
 int open_file(char *path) {
 	p_file = fopen(path, "r+");
@@ -45,15 +45,15 @@ void swap_clusters(int cluster1, int cluster2) {
     char *p_cluster2 = malloc(sizeof(char) * p_boot_record->cluster_size);
 	fseek(p_file, data_start + cluster2*p_boot_record->cluster_size, SEEK_SET);
     fread(p_cluster2, sizeof(char) * p_boot_record->cluster_size, 1, p_file);
-    
-    printf("Swapuju %s - %d a %s - %d\n", p_cluster1, data_start + cluster1*p_boot_record->cluster_size
-	,p_cluster2, data_start + cluster2*p_boot_record->cluster_size);
-    
+
     fseek(p_file, data_start + cluster1*p_boot_record->cluster_size, SEEK_SET);
     fwrite(p_cluster2, sizeof(char) * p_boot_record->cluster_size, 1, p_file);
+    unsigned int tmp = new_fat[cluster1];
+    new_fat[cluster1] = new_fat[cluster2];
     
     fseek(p_file, data_start + cluster2*p_boot_record->cluster_size, SEEK_SET);
     fwrite(p_cluster1, sizeof(char) * p_boot_record->cluster_size, 1, p_file);
+    new_fat[cluster2] = tmp;
     
 	free(p_cluster1);
 	free(p_cluster2);
@@ -116,6 +116,11 @@ void load_file() {
               		printf("%d - %d\n", l, fat_item[l]);
     		}
 		}
+    }
+    
+    new_fat = (unsigned int *) malloc (sizeof(unsigned int)*p_boot_record->cluster_count);
+    for(l = 0; l < p_boot_record->cluster_count; l++) {
+    	new_fat[l] = fat_item[l];
     }
     
     //prectu root tolikrat polik je maximalni pocet zaznamu v bootu - root_directory_max_entries_count        
