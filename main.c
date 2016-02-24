@@ -13,8 +13,8 @@ pthread_t th[THREADS];
 /* run this program using the console pauser or add your own getch, system("pause") or input loop */
 void help() {
 	printf("Program pro defragmentaci souboru a kontrolu konzistence FAT.\n");
-	printf("Spouštìní: ./zos (parametr) (soubor) (poèet vláken)\n");
-	printf("Pomocí parametrù je možné urèit funkci. Možné parametry jsou:\n");
+	printf("Spouï¿½tï¿½nï¿½: ./zos (parametr) (soubor) (poï¿½et vlï¿½ken)\n");
+	printf("Pomocï¿½ parametrï¿½ je moï¿½nï¿½ urï¿½it funkci. Moï¿½nï¿½ parametry jsou:\n");
 	printf("h - help\n");
 	printf("d - defragment\n");
 	printf("c - kontrola FAT\n");
@@ -22,11 +22,10 @@ void help() {
 
 void run_defrag(int threads) {
 	load_file();
-	print_clusters();
-	swap_clusters(0, 1);
-	print_clusters();
-	swap_clusters(0, 1);
-	print_clusters();
+	//print_clusters();
+	defrag();
+    write_stuff();
+	//print_clusters();
 }
 
 void run_con_check(int threads) {
