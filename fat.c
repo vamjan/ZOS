@@ -59,10 +59,10 @@ unsigned int *create_fat(FILE *p_file) {
 }
 
 void swap_clusters(int point1, int point2, int cluster1, int cluster2) {
+	unsigned int tmp_fat, i;
 	if(cluster1 > p_boot_record->cluster_count || cluster2 > p_boot_record->cluster_count) return;
-	printf("point1 = %d, point2 = %d, cluster1 = %d, cluster2 = %d\n", point1, point2, cluster1, cluster2);
-	unsigned int tmp_fat;
     if(cluster1 == cluster2) { return; }
+	
 	if(point1 >= 0) { new_fat[point1] = cluster2; }
 	if(point2 >= 0) { new_fat[point2] = cluster1; }
 	
@@ -74,12 +74,19 @@ void swap_clusters(int point1, int point2, int cluster1, int cluster2) {
    	strcpy(tmp_cluster, clusters[cluster1]);
   	strcpy(clusters[cluster1], clusters[cluster2]);
    	strcpy(clusters[cluster2], tmp_cluster);
+	
+	for(i = 0; i < p_boot_record->root_directory_max_entries_count; i++) {
+		if(cluster1 == p_root_directory[i]->first_cluster)
+			p_root_directory[i]->first_cluster = cluster2;
+		else if(cluster2 == p_root_directory[i]->first_cluster)
+			p_root_directory[i]->first_cluster = cluster1;
+	}
     
 	free(tmp_cluster);
 }
 
 int find_cluster_parent(int position) {
-	if(new_fat[position] == FAT_UNUSED || new_fat[position] == FAT_BAD_CLUSTER) return p_boot_record->cluster_count+1;
+	if(new_fat[position] == FAT_UNUSED || new_fat[position] == FAT_BAD_CLUSTER) return -1;
 	int i;
 	for(i = 0; i < p_boot_record->cluster_count; i++) {
 		if(new_fat[i] == position) return i;
@@ -104,34 +111,15 @@ void defrag() {
 		int first_cluster = correct_first_cluster(i);
 		int file_clusters = p_root_directory[i]->file_size/(p_boot_record->cluster_size);
 		if(p_root_directory[i]->file_size%(p_boot_record->cluster_size) != 0) file_clusters++;
-		printf("first cluster of file %d = %d\n", i, first_cluster);
 		
-		printf("cluster %d of file %d is being swaped\n", 1, i);//"\ttext - %s\n", 1, i, clusters[p_root_directory[i]->first_cluster]);
-		swap_clusters(-1, find_cluster_parent(p_root_directory[i]->first_cluster),first_cluster, p_root_directory[i]->first_cluster);
-		p_root_directory[i]->first_cluster = first_cluster;
-		
-		printf("file clusters = %d\n", file_clusters);
+		swap_clusters(find_cluster_parent(first_cluster), -1, first_cluster, p_root_directory[i]->first_cluster);
 		
 		for(j = 0; j < file_clusters-1; j++) {
-			printf("cluster %d of file %d is being swaped\n", j+2, i);//"\ttext - %s\n", j+2, i, clusters[new_fat[first_cluster+j]]);
 			swap_clusters(find_cluster_parent(first_cluster+j+1), first_cluster+j, first_cluster+j+1, new_fat[first_cluster+j]);
 		}
 		
 		printf("\n");
 	}
-	
-	int l;
-	for(l = 0; l < p_boot_record->cluster_count/20; l++) {
-	    if(new_fat[l] == FAT_UNUSED)
-	        printf("%d - FAT_UNUSED\t", l);
-	    else if(new_fat[l] == FAT_FILE_END)
-	        printf("%d - FILE_END\n", l);
-	    else if(new_fat[l] == FAT_BAD_CLUSTER)
-	        printf("%d - BAD_CLUSTER\t", l);
-	    else
-	        printf("%d - %d\t", l, new_fat[l]);
-	}
-	printf("\n");
 }
 
 void print_clusters() {
@@ -144,6 +132,7 @@ void print_clusters() {
     
     unsigned int curr;
     for(i = 0; i < p_boot_record->root_directory_max_entries_count; i++) {
+    	printf("FILE %d: ", i);
     	curr = p_root_directory[i]->first_cluster;
     	while(curr != FAT_FILE_END) {
     		printf("%s", clusters[curr]);
@@ -185,7 +174,7 @@ void load_file() {
   	printf("cluster count :%d\n",p_boot_record->cluster_count);
   	printf("reserved clusters :%d\n",p_boot_record->reserved_cluster_count);
   	printf("signature :%s\n",p_boot_record->signature);
-    
+        
     //prectu fat_copies krat 
     printf("-------------------------------------------------------- \n");
     printf("FAT \n");
@@ -197,22 +186,18 @@ void load_file() {
     for(l = 0; l < p_boot_record->fat_copies; l++) {
     	fat_item[l] = create_fat(p_file);
     }
-    int j;
-    for(j = 0; j < p_boot_record->fat_copies; j++) {
-        printf("\nFAT KOPIE %d\n", j + 1);
-    	for(l = 0; l < p_boot_record->cluster_count; l++) {
-            if(l < p_boot_record->cluster_count/20) {
-	          	if(fat_item[j][l] == FAT_UNUSED)
-	                printf("%d - FAT_UNUSED\n", l);
-	           	else if(fat_item[j][l] == FAT_FILE_END)
-	               	printf("%d - FILE_END\n", l);
-	           	else if(fat_item[j][l] == FAT_BAD_CLUSTER)
-	              	printf("%d - BAD_CLUSTER\n", l);
-	           	else
-	          		printf("%d - %d\n", l, fat_item[j][l]);
-            }
-		}
-    }
+    for(l = 0; l < p_boot_record->cluster_count; l++) {
+        if(fat_item[0][l] != FAT_UNUSED) {
+	       	/*if(fat_item[0][l] == FAT_UNUSED)
+	            printf("%d - FAT_UNUSED\n", l);
+	        else */if(fat_item[0][l] == FAT_FILE_END)
+	           	printf("%d - FILE_END\n", l);
+	       	else if(fat_item[0][l] == FAT_BAD_CLUSTER)
+	          	printf("%d - BAD_CLUSTER\n", l);
+	    	else
+	          	printf("%d - %d\n", l, fat_item[0][l]);
+        }
+	}
     
     new_fat = (unsigned int *) malloc (sizeof(unsigned int)*p_boot_record->cluster_count);
     for(l = 0; l < p_boot_record->cluster_count; l++) {

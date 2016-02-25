@@ -22,10 +22,10 @@ void help() {
 
 void run_defrag(int threads) {
 	load_file();
-	//print_clusters();
+	print_clusters();
 	defrag();
     write_stuff();
-	//print_clusters();
+	print_clusters();
 }
 
 void run_con_check(int threads) {
