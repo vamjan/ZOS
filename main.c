@@ -4,11 +4,10 @@
 #include <string.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include "threads.h"
 #include "fat.h"
-#define THREADS 10
 
-int A[THREADS*THREADS];
-pthread_t th[THREADS];
+pthread_t **consumer_threads;
 
 /* run this program using the console pauser or add your own getch, system("pause") or input loop */
 void help() {
@@ -22,10 +21,19 @@ void help() {
 
 void run_defrag(int threads) {
 	load_file();
-	print_clusters();
-	defrag();
-    write_stuff();
-	print_clusters();
+	//print_clusters();
+	
+	setup_locks(threads);
+	setup_producer();
+	
+	consumer_threads = create_threads(threads, &consumer_procedure);
+	
+	create_jobs(10);
+	
+	join_threads(threads, consumer_threads);		
+	
+    //write_stuff();
+	//print_clusters();
 }
 
 void run_con_check(int threads) {

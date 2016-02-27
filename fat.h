@@ -1,6 +1,12 @@
+#ifndef _FAT_H
+#define _FAT_H
+
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <pthread.h>
+#include <semaphore.h>
 
 //definice na vyznam hodnot FAT tabulky
 #define FAT_UNUSED 65535
@@ -28,9 +34,15 @@ typedef struct{
     unsigned int first_cluster;     //cluster ve FAT, kde soubor zacina - POZOR v cislovani root_directory ma prvni cluster index 0 (viz soubor a.txt)
 } root_directory;
 
+extern FILE *p_file;
+extern boot_record *p_boot_record;
+extern root_directory **p_root_directory;	//pole o velikosti root_directory_max_entries_count, jsou v nem ulozeny inforamce o souborech
+extern unsigned int **fat_item, *new_fat;	//pole o velikosti cluster_count, reprezetuje puvodni FAT
+extern char **clusters;
+
 //funkce pro praci s FAT
 boot_record *create_boot_record(FILE *p_file);
 root_directory *create_root_directory(FILE *p_file);
 void load_file();
 
-
+#endif

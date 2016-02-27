@@ -2,16 +2,17 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <pthread.h>
+#include <semaphore.h>
 #include "fat.h"
 
 FILE *p_file;
 boot_record *p_boot_record;
-
 root_directory **p_root_directory;	//pole o velikosti root_directory_max_entries_count, jsou v nem ulozeny inforamce o souborech
 unsigned int **fat_item, *new_fat;	//pole o velikosti cluster_count, reprezetuje puvodni FAT
 char **clusters;
 
-void free_all() {
+void free_data() {
 	//todo
 }
 
@@ -58,30 +59,21 @@ unsigned int *create_fat(FILE *p_file) {
 	return retval;
 }
 
-void swap_clusters(int point1, int point2, int cluster1, int cluster2) {
-	unsigned int tmp_fat, i;
-	if(cluster1 > p_boot_record->cluster_count || cluster2 > p_boot_record->cluster_count) return;
-    if(cluster1 == cluster2) { return; }
-	
+void swap_fat(int point1, int point2, int cluster1, int cluster2) {
+	unsigned int tmp_fat;
 	if(point1 >= 0) { new_fat[point1] = cluster2; }
 	if(point2 >= 0) { new_fat[point2] = cluster1; }
 	
 	tmp_fat = new_fat[cluster1];
 	new_fat[cluster1] = new_fat[cluster2];
 	new_fat[cluster2] = tmp_fat;
-	
+}
+
+void swap_clusters(int cluster1, int cluster2) {
 	char *tmp_cluster = malloc(sizeof(char) * p_boot_record->cluster_size);
    	strcpy(tmp_cluster, clusters[cluster1]);
   	strcpy(clusters[cluster1], clusters[cluster2]);
    	strcpy(clusters[cluster2], tmp_cluster);
-	
-	for(i = 0; i < p_boot_record->root_directory_max_entries_count; i++) {
-		if(cluster1 == p_root_directory[i]->first_cluster)
-			p_root_directory[i]->first_cluster = cluster2;
-		else if(cluster2 == p_root_directory[i]->first_cluster)
-			p_root_directory[i]->first_cluster = cluster1;
-	}
-    
 	free(tmp_cluster);
 }
 
@@ -94,7 +86,7 @@ int find_cluster_parent(int position) {
 	return -1;
 }
 
-int correct_first_cluster(int file_index) {
+int correct_first_cluster(int file_index, int offset) {
 	int retval = 0, i = 0;
 	while(i != file_index) {
 		int file_clusters = p_root_directory[i]->file_size/(p_boot_record->cluster_size-1);
@@ -102,24 +94,7 @@ int correct_first_cluster(int file_index) {
 		retval += file_clusters;
 		i++;
 	}
-	return retval;
-}
-
-void defrag() {
-	int i, j;
-	for(i = 0; i < p_boot_record->root_directory_max_entries_count; i++) {
-		int first_cluster = correct_first_cluster(i);
-		int file_clusters = p_root_directory[i]->file_size/(p_boot_record->cluster_size);
-		if(p_root_directory[i]->file_size%(p_boot_record->cluster_size) != 0) file_clusters++;
-		
-		swap_clusters(find_cluster_parent(first_cluster), -1, first_cluster, p_root_directory[i]->first_cluster);
-		
-		for(j = 0; j < file_clusters-1; j++) {
-			swap_clusters(find_cluster_parent(first_cluster+j+1), first_cluster+j, first_cluster+j+1, new_fat[first_cluster+j]);
-		}
-		
-		printf("\n");
-	}
+	return retval+offset;
 }
 
 void print_clusters() {
