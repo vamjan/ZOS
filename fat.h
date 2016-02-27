@@ -34,15 +34,27 @@ typedef struct{
     unsigned int first_cluster;     //cluster ve FAT, kde soubor zacina - POZOR v cislovani root_directory ma prvni cluster index 0 (viz soubor a.txt)
 } root_directory;
 
-extern FILE *p_file;
 extern boot_record *p_boot_record;
 extern root_directory **p_root_directory;	//pole o velikosti root_directory_max_entries_count, jsou v nem ulozeny inforamce o souborech
 extern unsigned int **fat_item, *new_fat;	//pole o velikosti cluster_count, reprezetuje puvodni FAT
 extern char **clusters;
 
 //funkce pro praci s FAT
+void free_data();
+int open_file(char *path);
 boot_record *create_boot_record(FILE *p_file);
-root_directory *create_root_directory(FILE *p_file);
+root_directory *create_root_dir(FILE *p_file);
+char *create_cluster(FILE *p_file);
+unsigned int *create_fat(FILE *p_file);
+
+void swap_fat(int point1, int point2, int cluster1, int cluster2);
+void swap_clusters(int cluster1, int cluster2);
+int find_cluster_parent(int position);
+int correct_first_cluster(int file_index, int offset);
+
+void print_clusters();
+void write_result();
+void load_clusters();
 void load_file();
 
 #endif

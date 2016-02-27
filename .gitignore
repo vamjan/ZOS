@@ -1,6 +1,11 @@
 fat.o
+threads.o
 main.o
 Makefile.win
+bigfat.fat
 output.fat
+test2.fat
+fat_tony.fat
 ZOS_SP2015.dev
 ZOS_SP2015.layout
+ZOS_SP2015.exe

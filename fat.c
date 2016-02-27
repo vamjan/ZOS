@@ -13,7 +13,25 @@ unsigned int **fat_item, *new_fat;	//pole o velikosti cluster_count, reprezetuje
 char **clusters;
 
 void free_data() {
-	//todo
+	int i;
+	for(i = 0; i < p_boot_record->root_directory_max_entries_count; i++) {
+		free(p_root_directory[i]);
+	}
+	
+	for(i = 0; i < p_boot_record->fat_copies; i++) {
+		free(fat_item[i]);
+	}
+	
+	if(clusters) {
+		for(i = 0; i < p_boot_record->cluster_count; i++) {
+			free(clusters[i]);
+		}
+	}
+	
+	free(fat_item);
+	free(p_boot_record);
+	free(new_fat);
+	free(clusters);
 }
 
 int open_file(char *path) {
@@ -44,7 +62,7 @@ root_directory *create_root_dir(FILE *p_file) {
 }
 
 char *create_cluster(FILE *p_file) {
-	char *retval = (char *)malloc(sizeof(char) * p_boot_record->cluster_count);
+	char *retval = (char *)malloc(sizeof(char) * p_boot_record->cluster_size);
 	
 	fread(retval, sizeof(char) * p_boot_record->cluster_size, 1, p_file);
 	
@@ -101,11 +119,19 @@ void print_clusters() {
 	int i;
 	printf("Vypisuji . . .\n");
     for (i = 0; i < p_boot_record->cluster_count; i++) {    
-      	if(clusters[i][0] != '\0')
-       		printf("Cluster %d - %s\n",i, clusters[i]);
+      	/*if(clusters[i][0] != '\0')
+       		printf("Cluster %d - %s\n",i, clusters[i]);*/
+    	if(new_fat[i] != FAT_UNUSED) {
+	    	if(new_fat[i] == FAT_FILE_END)
+	           	printf("%d - FILE_END\n", i);
+	       	else if(new_fat[i] == FAT_BAD_CLUSTER)
+	          	printf("%d - BAD_CLUSTER\n", i);
+	    	else
+	          	printf("%d - %d\n", i, new_fat[i]);
+        }
     }
     
-    unsigned int curr;
+    /*unsigned int curr;
     for(i = 0; i < p_boot_record->root_directory_max_entries_count; i++) {
     	printf("FILE %d: ", i);
     	curr = p_root_directory[i]->first_cluster;
@@ -114,10 +140,10 @@ void print_clusters() {
     		curr = new_fat[curr];
     	}
     	printf("\n");
-    }
+    }*/
 }
 
-void write_stuff() {
+void write_result() {
     int i;
     fseek(p_file, 0, SEEK_SET);
     fwrite(p_boot_record, sizeof(boot_record), 1, p_file);
@@ -132,78 +158,34 @@ void write_stuff() {
     }
 }
 
-void load_file() {
-                        
-    //alokujeme pamet
-    p_boot_record = create_boot_record(p_file);
-    
-    //prectu boot
-    printf("-------------------------------------------------------- \n");
-    printf("BOOT RECORD \n");
-    printf("-------------------------------------------------------- \n");
-    printf("volume_descriptor :%s\n",p_boot_record->volume_descriptor);
-  	printf("fat_type :%d\n",p_boot_record->fat_type);
-  	printf("fat_copies :%d\n",p_boot_record->fat_copies);
-  	printf("cluster_size :%d\n",p_boot_record->cluster_size);
-  	printf("root_directory_max_entries_count :%ld\n",p_boot_record->root_directory_max_entries_count);    
-  	printf("cluster count :%d\n",p_boot_record->cluster_count);
-  	printf("reserved clusters :%d\n",p_boot_record->reserved_cluster_count);
-  	printf("signature :%s\n",p_boot_record->signature);
-        
-    //prectu fat_copies krat 
-    printf("-------------------------------------------------------- \n");
-    printf("FAT \n");
-    printf("-------------------------------------------------------- \n");
-    
-    long l;
-    unsigned int tmp;
-    fat_item = malloc(sizeof(unsigned int *) * p_boot_record->fat_copies);
-    for(l = 0; l < p_boot_record->fat_copies; l++) {
-    	fat_item[l] = create_fat(p_file);
-    }
-    for(l = 0; l < p_boot_record->cluster_count; l++) {
-        if(fat_item[0][l] != FAT_UNUSED) {
-	       	/*if(fat_item[0][l] == FAT_UNUSED)
-	            printf("%d - FAT_UNUSED\n", l);
-	        else */if(fat_item[0][l] == FAT_FILE_END)
-	           	printf("%d - FILE_END\n", l);
-	       	else if(fat_item[0][l] == FAT_BAD_CLUSTER)
-	          	printf("%d - BAD_CLUSTER\n", l);
-	    	else
-	          	printf("%d - %d\n", l, fat_item[0][l]);
-        }
-	}
-    
-    new_fat = (unsigned int *) malloc (sizeof(unsigned int)*p_boot_record->cluster_count);
-    for(l = 0; l < p_boot_record->cluster_count; l++) {
-    	new_fat[l] = fat_item[0][l];
-    }
-    
-    //prectu root tolikrat polik je maximalni pocet zaznamu v bootu - root_directory_max_entries_count        
-    printf("-------------------------------------------------------- \n");
-    printf("ROOT DIRECTORY \n");
-    printf("-------------------------------------------------------- \n");
-    
-    p_root_directory = malloc(sizeof(root_directory)*p_boot_record->root_directory_max_entries_count);
-  	int i;
-    for (i = 0; i < p_boot_record->root_directory_max_entries_count; i++)
-    {
-		p_root_directory[i] = create_root_dir(p_file);
-	    printf("FILE %d \n",i);
-	    printf("file_name :%s\n",p_root_directory[i]->file_name); 
-	    printf("file_mod :%s\n",p_root_directory[i]->file_mod);
-	    printf("file_type :%d\n",p_root_directory[i]->file_type);
-	    printf("file_size :%d\n",p_root_directory[i]->file_size);
-	    printf("first_cluster :%d\n",p_root_directory[i]->first_cluster); 
-    }
-    
-    printf("-------------------------------------------------------- \n");
-    printf("CLUSTERY - OBSAH \n");
-    printf("-------------------------------------------------------- \n");
-    
+void load_clusters() {
+    int i;
     clusters = malloc(sizeof(char *) * p_boot_record->cluster_count);
     for(i = 0; i < p_boot_record->cluster_count; i++) {
     	clusters[i] = create_cluster(p_file);
     }
+}
 
+void load_file() {
+    int i;                    
+    //alokujeme pamet
+    p_boot_record = create_boot_record(p_file);
+       
+    unsigned int tmp;
+    fat_item = malloc(sizeof(unsigned int *) * p_boot_record->fat_copies);
+    for(i = 0; i < p_boot_record->fat_copies; i++) {
+    	fat_item[i] = create_fat(p_file);
+    }
+    
+    new_fat = (unsigned int *) malloc (sizeof(unsigned int)*p_boot_record->cluster_count);
+    for(i = 0; i < p_boot_record->cluster_count; i++) {
+    	new_fat[i] = fat_item[0][i];
+    }
+    
+    p_root_directory = malloc(sizeof(root_directory)*p_boot_record->root_directory_max_entries_count);
+  	
+    for (i = 0; i < p_boot_record->root_directory_max_entries_count; i++)
+    {
+		p_root_directory[i] = create_root_dir(p_file);
+    }
 }
