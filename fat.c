@@ -6,12 +6,17 @@
 #include <semaphore.h>
 #include "fat.h"
 
-FILE *p_file;
-boot_record *p_boot_record;
-root_directory **p_root_directory;	//pole o velikosti root_directory_max_entries_count, jsou v nem ulozeny inforamce o souborech
-unsigned int **fat_item, *new_fat;	//pole o velikosti cluster_count, reprezetuje puvodni FAT
-char **clusters;
+//tento soubor obsahuje všechny funkce pro práci s FAT tabulkami a clustery
 
+FILE *p_file;						//FAT soubor, nad kterým se provádí požadovaná funkce
+boot_record *p_boot_record;			//hlavièka FAT souboru obsahující informace
+root_directory **p_root_directory;	//pole o velikosti root_directory_max_entries_count, jsou v nem ulozeny inforamce o souborech
+unsigned int **fat_item, *new_fat;	//pole o velikosti cluster_count, reprezetuje puvodni FAT tabulky - - - nová FAT tabulka co se bude mìnit pøi výpoètu
+char **clusters;					//pole clusterù kam se naète obsah souboru
+
+/**
+ * Funkce uvolnìní všech naètených dat
+ */
 void free_data() {
 	int i;
 	for(i = 0; i < p_boot_record->root_directory_max_entries_count; i++) {
@@ -22,7 +27,7 @@ void free_data() {
 		free(fat_item[i]);
 	}
 	
-	if(clusters) {
+	if(clusters) { //v pøípadì že jde o kontrolu konzistence, neni tøeba uvolòovat clustery protože se nenahrály
 		for(i = 0; i < p_boot_record->cluster_count; i++) {
 			free(clusters[i]);
 		}
@@ -34,6 +39,11 @@ void free_data() {
 	free(clusters);
 }
 
+/**
+ * Funkce pro otevøení souboru zadaného parametrem path
+ * Soubor je uložen v promìnné p_file
+ * parametry:	path - otevíraný soubor
+ */
 int open_file(char *path) {
 	p_file = fopen(path, "r+");
 	
@@ -45,6 +55,10 @@ int open_file(char *path) {
     return 1;
 }
 
+/**
+ * Funkce pro vytvoøení hlavièky souboru boot_record
+ * parametry:	p_file - zdrojový soubor
+ */
 boot_record *create_boot_record(FILE *p_file) {
 	boot_record *retval = (boot_record *) malloc(sizeof(boot_record));
 	
@@ -53,6 +67,10 @@ boot_record *create_boot_record(FILE *p_file) {
 	return retval;
 }
 
+/**
+ * Funkce pro vytvoøení záznamu souboru root_directory nachazejícího se uvnitø p_file
+ * parametry:	p_file - zdrojový soubor
+ */
 root_directory *create_root_dir(FILE *p_file) {
 	root_directory *retval = (root_directory *) malloc(sizeof(root_directory));
 	
@@ -61,6 +79,10 @@ root_directory *create_root_dir(FILE *p_file) {
 	return retval;
 }
 
+/**
+ * Funkce pro vytvoøení clusteru obsahujícího data souboru
+ * parametry:	p_file - zdrojový soubor
+ */
 char *create_cluster(FILE *p_file) {
 	char *retval = (char *)malloc(sizeof(char) * p_boot_record->cluster_size);
 	
@@ -69,6 +91,10 @@ char *create_cluster(FILE *p_file) {
 	return retval;
 }
 
+/**
+ * Funkce pro vytvoøení FAT tabulky souboru
+ * parametry:	p_file - zdrojový soubor
+ */
 unsigned int *create_fat(FILE *p_file) {
 	unsigned int *retval = (unsigned int *) malloc (sizeof(unsigned int)*p_boot_record->cluster_count);
 	
@@ -77,6 +103,15 @@ unsigned int *create_fat(FILE *p_file) {
 	return retval;
 }
 
+/**
+ * Funkce pro prohození 2 záznamù v tabulce FAT. Nejdøíve prohodí ukazatele point1 a point2.
+ * V pøípadì že je jeden z nich -1 (nic na cluster neukzuje) se prohození pointù neprovede.
+ * Potom se provede prohození samotných FAT záznamù požadovaných clusterù.
+ * parametry:	point1 - index ukazatele na cluster1
+ *				point2 - index ukazatele na cluster2
+ *				cluster1 - index FAT záznamu cluster1
+ *				cluster2 - index FAT záznamu cluster2
+ */
 void swap_fat(int point1, int point2, int cluster1, int cluster2) {
 	unsigned int tmp_fat;
 	if(point1 >= 0) { new_fat[point1] = cluster2; }
@@ -87,6 +122,11 @@ void swap_fat(int point1, int point2, int cluster1, int cluster2) {
 	new_fat[cluster2] = tmp_fat;
 }
 
+/**
+ * Funkce prohození dat v clusterù.
+ * parametry:	cluster1 - index cluster1
+ *				cluster2 - index cluster2
+ */
 void swap_clusters(int cluster1, int cluster2) {
 	char *tmp_cluster = malloc(sizeof(char) * p_boot_record->cluster_size);
    	strcpy(tmp_cluster, clusters[cluster1]);
@@ -95,6 +135,11 @@ void swap_clusters(int cluster1, int cluster2) {
 	free(tmp_cluster);
 }
 
+/**
+ * Funkce pro nalezení clusteru, který ukazuje na zadaný cluster.
+ * V pøípadì kdy takový cluster neexistuje vrátí -1.
+ * parametry:	position - cluster, pro který se hledá jeho rodiè
+ */
 int find_cluster_parent(int position) {
 	if(new_fat[position] == FAT_UNUSED || new_fat[position] == FAT_BAD_CLUSTER) return -1;
 	int i;
@@ -104,10 +149,18 @@ int find_cluster_parent(int position) {
 	return -1;
 }
 
+/**
+ * Funkce pro vypoèítání správné pozice prvního clusteru.
+ * Poèítá správnou pozici pomocí záznamu velikosti souboru v root_directory
+ * parametry:	file_index - index souboru
+ *				offset - offset clusterù uvnitø souboru (nemusí vždy hledat 1. cluster)
+ */
 int correct_first_cluster(int file_index, int offset) {
 	int retval = 0, i = 0;
+	//projde všechny soubory dokud nenajde hleddaný a poèítá pøi tom jejich celkovou délku
 	while(i != file_index) {
 		int file_clusters = p_root_directory[i]->file_size/(p_boot_record->cluster_size-1);
+		//v pøípadì je soubor plnì zaplnìn je potøeba pøièíst 1 cluster (kvùli dìlení v pøedchozím kroku)s
 		if(p_root_directory[i]->file_size%(p_boot_record->cluster_size-1) != 0) file_clusters++;
 		retval += file_clusters;
 		i++;
@@ -115,6 +168,9 @@ int correct_first_cluster(int file_index, int offset) {
 	return retval+offset;
 }
 
+/**
+ * Pomocná funkce pro výpis clusterù souboru. V release verzi nepoužitá.
+ */
 void print_clusters() {
 	int i;
 	printf("Vypisuji . . .\n");
@@ -143,6 +199,9 @@ void print_clusters() {
     }*/
 }
 
+/**
+ * Funkce pro zápis výsledné podoby FAT do souboru p_file.
+ */
 void write_result() {
     int i;
     fseek(p_file, 0, SEEK_SET);
@@ -158,6 +217,9 @@ void write_result() {
     }
 }
 
+/**
+ * Funkce pro naètení všech clusterù souboru do pamìti.
+ */
 void load_clusters() {
     int i;
     clusters = malloc(sizeof(char *) * p_boot_record->cluster_count);
@@ -166,9 +228,11 @@ void load_clusters() {
     }
 }
 
+/**
+ * Funkce pro naètení boot_record, FAT tabulek a root_directory záznamù.
+ */
 void load_file() {
     int i;                    
-    //alokujeme pamet
     p_boot_record = create_boot_record(p_file);
        
     unsigned int tmp;

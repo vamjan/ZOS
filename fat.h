@@ -35,8 +35,8 @@ typedef struct{
 } root_directory;
 
 extern boot_record *p_boot_record;
-extern root_directory **p_root_directory;	//pole o velikosti root_directory_max_entries_count, jsou v nem ulozeny inforamce o souborech
-extern unsigned int **fat_item, *new_fat;	//pole o velikosti cluster_count, reprezetuje puvodni FAT
+extern root_directory **p_root_directory;
+extern unsigned int **fat_item, *new_fat;
 extern char **clusters;
 
 //funkce pro praci s FAT
